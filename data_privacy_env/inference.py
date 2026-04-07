@@ -161,16 +161,25 @@ CRITICAL RULES:
     elif task_id == "task2_csv":
         workflow = """STEP-BY-STEP WORKFLOW:
 1. If customers.csv is NOT in FILE CONTENTS → read_file customers.csv
-2. Once customers.csv is in FILE CONTENTS:
-   - Call redact_text for each customer's name (exact string from file)
-   - Call redact_text for each customer's SSN (exact string from file, e.g. "123-45-6789")
-   - Do NOT redact emails or customer IDs
-3. After all names and SSNs are redacted → {"tool": "submit"}
+2. Once customers.csv is in FILE CONTENTS, redact ALL 8 items in this exact order:
+   NAMES (4 items — one per customer row, exact full name string):
+   - redact_text for customer 1's name
+   - redact_text for customer 2's name
+   - redact_text for customer 3's name
+   - redact_text for customer 4's name
+   SSNs (4 items — format "XXX-XX-XXXX", one per customer row):
+   - redact_text for customer 1's SSN
+   - redact_text for customer 2's SSN
+   - redact_text for customer 3's SSN
+   - redact_text for customer 4's SSN
+3. Count ALREADY REDACTED items — only submit when count = 8 (4 names + 4 SSNs)
+4. Do NOT redact emails or customer IDs
 
 CRITICAL RULES:
 - Output exactly ONE JSON object per response
 - Once the file appears in FILE CONTENTS, NEVER call read_file again
-- Use exact values from the file as target_string"""
+- Use exact values from the file as target_string
+- Do NOT submit until all 8 items (4 names + 4 SSNs) appear in ALREADY REDACTED list"""
 
     else:  # task1_plaintext
         workflow = """STEP-BY-STEP WORKFLOW:
