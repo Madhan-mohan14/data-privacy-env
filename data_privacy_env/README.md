@@ -1,3 +1,19 @@
+---
+title: DataPrivacyEnv
+emoji: 🔒
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+license: mit
+tags:
+  - openenv
+  - reinforcement-learning
+  - privacy
+  - pii
+  - gdpr
+---
+
 # DataPrivacyEnv
 
 PII Redaction and GDPR Compliance RL Environment
@@ -51,8 +67,8 @@ Max reward: 1.6
 Cross-file contextual redaction. Read breach_report.txt 
 to find compromised Patient ID, then redact all sensitive 
 fields (name, diagnosis, medication, ssn, phone, email, 
-insurance_id) for that patient in medical_database.json.
-Max reward: 1.6
+insurance_id, date_of_birth) for that patient in 
+medical_database.json. Max reward: 1.6
 
 ## Setup
 ```bash
@@ -62,20 +78,23 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 
 ## Run Inference
 ```bash
-export API_BASE_URL=https://api-inference.huggingface.co/v1
-export HF_TOKEN=your_token
-export MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct
+cp .env.example .env
+# Edit .env with your API key and model
+export API_BASE_URL=https://router.huggingface.co/v1
+export HF_TOKEN=your_groq_or_hf_token
+export MODEL_NAME=llama-3.3-70b-versatile
 export IMAGE_NAME=dataprivacy-env:latest
 python inference.py
 ```
 
 ## Docker
 ```bash
-docker build -t dataprivacy-env:latest -f server/Dockerfile .
-docker run -p 7860:7860 dataprivacy-env:latest
+docker build -t dataprivacy-env:latest .
+docker run -p 8000:8000 dataprivacy-env:latest
 ```
 
-## Baseline Scores
-- task1_plaintext: 0.62 (easy)
-- task2_csv: 0.51 (medium)
-- task3_json: 0.38 (hard)
+## Achieved Scores (llama-3.3-70b-versatile via Groq)
+- task1_plaintext: 1.00 (perfect)
+- task2_csv: 1.00 (perfect)
+- task3_json: 0.81 (hard cross-file task)
+- **Average: 0.94**

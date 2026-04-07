@@ -4,7 +4,7 @@ version: 1.0.0
 type: space
 runtime: fastapi
 app: server.app:app
-port: 8000
+port: 7860
 description: >
   PII Redaction and GDPR Compliance RL Environment.
   Agent learns to find and redact personally identifiable
