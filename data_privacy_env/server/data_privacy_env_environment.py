@@ -134,7 +134,7 @@ class DataPrivacyEnvironment(Environment):
     Agent learns to find and redact sensitive data across 3 tasks.
     """
 
-    SUPPORTS_CONCURRENT_SESSIONS: bool = True
+    SUPPORTS_CONCURRENT_SESSIONS: bool = False
 
     def __init__(self):
         self._state = State(episode_id=str(uuid4()), step_count=0)

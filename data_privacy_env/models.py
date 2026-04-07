@@ -64,3 +64,4 @@ class DataPrivacyObservation(Observation):
     files_in_scope: list[str] = Field(default=[], description="Files available")
     step_number: int = Field(default=0, description="Current step")
     max_steps: int = Field(default=25, description="Max steps allowed")
+    done: bool = Field(default=False, description="Whether the episode has ended")
