@@ -1,0 +1,53 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv
+venv
+env
+ENV
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv
+uv.lock
+
+# Claude / agents config
+.claude
+.agents
+CLAUDE.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.dockerignore
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/

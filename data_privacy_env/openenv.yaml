@@ -1,0 +1,27 @@
+spec_version: 1
+name: dataprivacy-env
+version: 1.0.0
+type: space
+runtime: fastapi
+app: server.app:app
+port: 8000
+description: >
+  PII Redaction and GDPR Compliance RL Environment.
+  Agent learns to find and redact personally identifiable
+  information from files without breaking file structure.
+tags:
+  - openenv
+  - privacy
+  - gdpr
+  - pii
+  - compliance
+tasks:
+  - id: task1_plaintext
+    difficulty: easy
+    description: Redact emails and phone numbers from server logs
+  - id: task2_csv
+    difficulty: medium
+    description: Redact name and SSN from CSV without breaking format
+  - id: task3_json
+    difficulty: hard
+    description: Cross-file contextual redaction in JSON medical records
