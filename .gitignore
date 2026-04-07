@@ -1,20 +1,14 @@
-# Environment
-.env
-.env.*
-!.env.example
-
-# Python virtual environments
-.venv
-venv
-env
-ENV
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
 
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.pycache
 
 # Distribution / packaging
 *.egg-info/
@@ -24,6 +18,11 @@ build/
 
 # uv
 uv.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
 
 # Claude / agents config
 .claude
@@ -43,9 +42,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
-
-# Docker
-*.dockerignore
 
 # Test / coverage
 .coverage

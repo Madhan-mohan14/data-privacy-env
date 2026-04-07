@@ -1,0 +1,13 @@
+.env
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.claude
+.agents
+CLAUDE.md
+*.md
+.git
+.gitignore
+uv.lock
