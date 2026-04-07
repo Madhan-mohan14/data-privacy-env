@@ -1,8 +1,8 @@
 """
-Data Privacy Env — Baseline Inference Script.
+Data Privacy Env — Inference Script.
 
-Runs a PII redaction agent against all 3 tasks using the OpenEnv EnvClient.
-Follows the official OpenEnv sample inference script pattern.
+Runs a PII redaction agent against all 3 tasks using direct HTTP calls
+to the environment server (HF Space or local Docker container).
 
 Usage:
     python inference.py
@@ -11,25 +11,20 @@ Required environment variables:
     API_BASE_URL   The API endpoint for the LLM.
     MODEL_NAME     The model identifier to use for inference.
     HF_TOKEN       Your Hugging Face / API key.
-    IMAGE_NAME     Docker image name (optional, defaults to dataprivacy-env:latest).
+    ENV_URL        The environment server URL (default: HF Space URL).
 """
 
 import asyncio
 import json as _json
 import os
 import re
-import sys
 from typing import Dict, List
 
+import httpx
 from dotenv import load_dotenv
-load_dotenv()
-
 from openai import OpenAI
 
-# Ensure local modules (client.py, models.py) are importable when run as a script
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from client import DataPrivacyEnv  # noqa: E402
-from models import DataPrivacyAction  # noqa: E402
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -37,7 +32,7 @@ from models import DataPrivacyAction  # noqa: E402
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY: str = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
-IMAGE_NAME: str = os.getenv("IMAGE_NAME", "dataprivacy-env:latest")
+ENV_URL: str = os.getenv("ENV_URL", "https://maddy140605-dataprivacy-env.hf.space")
 
 BENCHMARK: str = "dataprivacy-env"
 MAX_STEPS: int = 20
@@ -51,6 +46,21 @@ TASK_MAX_REWARDS: dict = {
     "task2_csv": 1.6,
     "task3_json": 1.6,
 }
+
+
+# ---------------------------------------------------------------------------
+# HTTP helpers — direct calls to the environment server
+# ---------------------------------------------------------------------------
+async def reset_env(http: httpx.AsyncClient, task_id: str) -> dict:
+    resp = await http.post("/reset", json={"task_id": task_id})
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def step_env(http: httpx.AsyncClient, message: str) -> dict:
+    resp = await http.post("/step", json={"action": {"message": message}})
+    resp.raise_for_status()
+    return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -120,14 +130,12 @@ def already_redacted(history: List[str]) -> List[str]:
 # ---------------------------------------------------------------------------
 def get_model_message(
     client: OpenAI,
-    result,
+    obs: dict,
     last_reward: float,
     history: List[str],
     task_id: str,
     file_cache: Dict[str, str],
 ) -> str:
-    obs = result.observation
-
     redacted = already_redacted(history)
     redacted_note = (
         f"\nALREADY REDACTED (do NOT redact these again): {redacted}"
@@ -197,11 +205,11 @@ CRITICAL RULES:
     prompt = f"""You are a PII redaction compliance agent.
 Output ONLY a single JSON object — no explanation, no markdown, no extra text before or after.
 
-TASK: {obs.task_description}
-STEP: {obs.step_number} / {obs.max_steps}
-LAST RESULT: {obs.last_action_result}
+TASK: {obs.get("task_description", "")}
+STEP: {obs.get("step_number", 0)} / {obs.get("max_steps", 20)}
+LAST RESULT: {obs.get("last_action_result", "")}
 LAST REWARD: {last_reward}
-CUMULATIVE REWARD: {obs.cumulative_reward}
+CUMULATIVE REWARD: {obs.get("cumulative_reward", 0.0)}
 {redacted_note}
 {cached_section}
 RECENT HISTORY:
@@ -232,12 +240,10 @@ Valid JSON formats:
 # Main
 # ---------------------------------------------------------------------------
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-    env = await DataPrivacyEnv.from_docker_image(IMAGE_NAME)
-
+    llm_client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     all_scores: List[float] = []
 
-    try:
+    async with httpx.AsyncClient(base_url=ENV_URL, timeout=60.0) as http:
         for task_id in TASKS:
             print(f"\n{'=' * 50}", flush=True)
             print(f"Running {task_id}", flush=True)
@@ -253,20 +259,28 @@ async def main() -> None:
             log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
             try:
-                result = await env.reset(task_id=task_id)
+                data = await reset_env(http, task_id)
+                obs = data.get("observation", {})
+                done = data.get("done", False)
                 last_reward: float = 0.0
 
                 for step in range(1, MAX_STEPS + 1):
-                    if result.done:
+                    if done:
                         break
 
                     message = get_model_message(
-                        client, result, last_reward, history, task_id, file_cache
+                        llm_client, obs, last_reward, history, task_id, file_cache
                     )
-                    result = await env.step(DataPrivacyAction(message=message))
 
-                    reward = result.reward or 0.0
-                    done = result.done
+                    try:
+                        data = await step_env(http, message)
+                    except Exception as exc:
+                        print(f"[DEBUG] Step request failed: {exc}", flush=True)
+                        break
+
+                    obs = data.get("observation", {})
+                    reward = float(data.get("reward") or 0.0)
+                    done = bool(data.get("done", False))
 
                     # Cache file content after a successful read_file
                     try:
@@ -274,8 +288,8 @@ async def main() -> None:
                         if action_data.get("tool") == "read_file" and reward >= 0:
                             fname = action_data.get("file_path", "")
                             if fname and fname not in file_cache:
-                                file_cache[fname] = str(result.observation.last_action_result)
-                    except (_json.JSONDecodeError, AttributeError):
+                                file_cache[fname] = str(obs.get("last_action_result", ""))
+                    except _json.JSONDecodeError:
                         pass
 
                     rewards.append(reward)
@@ -298,12 +312,6 @@ async def main() -> None:
 
             all_scores.append(score)
             print(f"Score for {task_id}: {score:.2f}", flush=True)
-
-    finally:
-        try:
-            await env.close()
-        except Exception as e:
-            print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
 
     avg = sum(all_scores) / len(all_scores) if all_scores else 0.0
     print(f"\nAverage score across all tasks: {avg:.2f}", flush=True)

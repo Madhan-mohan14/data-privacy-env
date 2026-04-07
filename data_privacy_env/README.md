@@ -96,5 +96,5 @@ docker run -p 8000:8000 dataprivacy-env:latest
 ## Achieved Scores (llama-3.3-70b-versatile via Groq)
 - task1_plaintext: 1.00 (perfect)
 - task2_csv: 1.00 (perfect)
-- task3_json: 0.81 (hard cross-file task)
-- **Average: 0.94**
+- task3_json: 0.72 (hard cross-file task)
+- **Average: 0.91**
