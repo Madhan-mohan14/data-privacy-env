@@ -19,9 +19,12 @@ tasks:
   - id: task1_plaintext
     difficulty: easy
     description: Redact emails and phone numbers from server logs
+    max_reward: 2.0
   - id: task2_csv
     difficulty: medium
     description: Redact name and SSN from CSV without breaking format
+    max_reward: 2.0
   - id: task3_json
     difficulty: hard
     description: Cross-file contextual redaction in JSON medical records
+    max_reward: 2.0

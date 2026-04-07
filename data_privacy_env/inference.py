@@ -42,9 +42,9 @@ SUCCESS_SCORE_THRESHOLD: float = 0.6
 TASKS: List[str] = ["task1_plaintext", "task2_csv", "task3_json"]
 
 TASK_MAX_REWARDS: dict = {
-    "task1_plaintext": 1.6,
-    "task2_csv": 1.6,
-    "task3_json": 1.6,
+    "task1_plaintext": 2.0,
+    "task2_csv": 2.0,
+    "task3_json": 2.0,
 }
 
 

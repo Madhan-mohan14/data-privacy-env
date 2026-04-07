@@ -211,8 +211,8 @@ class DataPrivacyEnvironment(Environment):
             else:
                 content = self.virtual_fs[file_path]
                 result_msg = f"=== {file_path} ===\n{content}"
-                reward = 0.0
-                # Task 3 partial credit for reading breach report
+                reward = 0.05  # small reward for reading a file (ensures min score > 0)
+                # Task 3 extra credit for reading breach report
                 if (self.task_id == "task3_json" and
                         file_path == "breach_report.txt" and
                         not self.found_patient_id):
