@@ -35,7 +35,7 @@ from models import DataPrivacyAction  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY: str = os.getenv("HF_TOKEN", "dummy")
+API_KEY: str = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
 IMAGE_NAME: str = os.getenv("IMAGE_NAME", "dataprivacy-env:latest")
 
