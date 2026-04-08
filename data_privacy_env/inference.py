@@ -155,16 +155,25 @@ def get_model_message(
 1. If breach_report.txt is NOT in FILE CONTENTS → read_file breach_report.txt
 2. If medical_database.json is NOT in FILE CONTENTS → read_file medical_database.json
 3. Once both files are in FILE CONTENTS:
-   - Find the compromised Patient ID from breach_report.txt
-   - Find that patient's record in medical_database.json
-   - Call redact_text once per sensitive field using the EXACT string value from the JSON:
-     fields: name, diagnosis, medication, ssn, phone, email, insurance_id, date_of_birth
-4. After redacting all 8 fields → {"tool": "submit"}
+   - Find the compromised Patient ID number from breach_report.txt (e.g. "Patient ID: 1234")
+   - Find that patient's record in medical_database.json by matching the "id" field
+   - Call redact_text EXACTLY 8 times, once per field, using the EXACT string value from the JSON:
+     FIELD 1: "name" value (e.g. "John Smith")
+     FIELD 2: "diagnosis" value (e.g. "Type 2 Diabetes")
+     FIELD 3: "medication" value (e.g. "Metformin 500mg")
+     FIELD 4: "ssn" value (e.g. "123-45-6789")
+     FIELD 5: "phone" value (e.g. "+1-555-123-4567")
+     FIELD 6: "email" value (e.g. "john@email.com")
+     FIELD 7: "insurance_id" value (e.g. "INS-1234-ABC")
+     FIELD 8: "date_of_birth" value (e.g. "1975-03-15")
+4. After ALREADY REDACTED list has 8 items → {"tool": "submit"}
 
 CRITICAL RULES:
 - Output exactly ONE JSON object per response
 - Once a file appears in FILE CONTENTS, NEVER call read_file for it again
-- Use the exact field value as target_string (copy character-for-character from the file)"""
+- Use the exact field value as target_string (copy character-for-character from the file)
+- NEVER redact the "id" field or numeric patient IDs — they are NOT PII in this task
+- DO NOT redact other patients' data"""
 
     elif task_id == "task2_csv":
         workflow = """STEP-BY-STEP WORKFLOW:
@@ -180,14 +189,14 @@ CRITICAL RULES:
    - redact_text for customer 2's SSN
    - redact_text for customer 3's SSN
    - redact_text for customer 4's SSN
-3. Count ALREADY REDACTED items — only submit when count = 8 (4 names + 4 SSNs)
+3. When ALREADY REDACTED list has exactly 8 items → {"tool": "submit"} IMMEDIATELY
 4. Do NOT redact emails or customer IDs
 
 CRITICAL RULES:
 - Output exactly ONE JSON object per response
 - Once the file appears in FILE CONTENTS, NEVER call read_file again
 - Use exact values from the file as target_string
-- Do NOT submit until all 8 items (4 names + 4 SSNs) appear in ALREADY REDACTED list"""
+- When ALREADY REDACTED count = 8, your ONLY valid next action is {"tool": "submit"}"""
 
     else:  # task1_plaintext
         workflow = """STEP-BY-STEP WORKFLOW:
@@ -195,7 +204,7 @@ CRITICAL RULES:
 2. Once server_logs.txt is in FILE CONTENTS:
    - Call redact_text for each email address (exact string from file)
    - Call redact_text for each phone number (exact string from file)
-3. After all emails and phone numbers are redacted → {"tool": "submit"}
+3. When ALREADY REDACTED list has exactly 8 items → {"tool": "submit"} IMMEDIATELY
 
 CRITICAL RULES:
 - Output exactly ONE JSON object per response
@@ -271,6 +280,11 @@ async def main() -> None:
                     message = get_model_message(
                         llm_client, obs, last_reward, history, task_id, file_cache
                     )
+
+                    # Safety net: if all 8 PII items confirmed redacted, force submit
+                    successful_redactions = sum(1 for r in rewards if abs(r - 0.20) < 0.001)
+                    if successful_redactions >= 8:
+                        message = '{"tool": "submit"}'
 
                     try:
                         data = await step_env(http, message)

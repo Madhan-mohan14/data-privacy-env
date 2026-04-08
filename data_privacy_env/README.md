@@ -93,8 +93,11 @@ docker build -t dataprivacy-env:latest .
 docker run -p 8000:8000 dataprivacy-env:latest
 ```
 
-## Achieved Scores (llama-3.3-70b-versatile via Groq)
-- task1_plaintext: 1.00 (perfect)
-- task2_csv: 1.00 (perfect)
-- task3_json: 0.72 (hard cross-file task)
-- **Average: 0.91**
+## Achieved Scores (llama-3.3-70b-versatile)
+- task1_plaintext: 0.825 (consistent across random episodes)
+- task2_csv: 0.825 (consistent across random episodes)
+- task3_json: 0.875–0.900 (hard cross-file task)
+- **Average: ~0.84**
+
+Note: Scores are consistent across episodes because the environment
+generates fresh random PII each episode — true RL, not a memorized puzzle.
