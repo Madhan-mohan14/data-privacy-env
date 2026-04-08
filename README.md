@@ -86,25 +86,29 @@ Signal task completion and trigger final scoring.
 
 | Event | Reward |
 |-------|--------|
-| Correct redaction (first time) | `+0.20` |
+| Correct redaction (true positive) | `+0.20` |
+| `read_file` any file | `+0.05` |
+| `read_file` breach report (task3 only) | `+0.15` |
 | Duplicate redaction (already redacted) | `-0.05` |
 | Wrong redaction (non-PII field) | `-0.20` |
-| Early submit (missing required redactions) | `-1.00` to `-2.80` |
-| `read_file` (neutral) | `0.00` |
+| Missed PII at submit (per item) | `-0.30` |
+| CSV/JSON structure broken | `-1.00` (episode ends) |
 | Successful `submit` after all redactions | `0.00` |
 
-Max achievable reward per task: **1.60**
+Max reward per task: **2.0** (score = cumulative / 2.0, clamped to (0.001, 0.999))
 
 ---
 
 ## Achieved Scores
 
-| Task | Score | Status |
-|------|-------|--------|
-| `task1_plaintext` | 1.00 | Passed |
-| `task2_csv` | 1.00 | Passed |
-| `task3_json` | 0.72 | Passed |
-| **Average** | **0.91** | **All tasks passed** |
+Tested with `llama-3.3-70b-versatile`. Episodes use **fresh random PII each run** — true RL, not a memorized puzzle.
+
+| Task | Score | Notes |
+|------|-------|-------|
+| `task1_plaintext` | 0.825 | Consistent across episodes |
+| `task2_csv` | 0.825 | Consistent across episodes |
+| `task3_json` | 0.875–0.900 | Hard cross-file reasoning task |
+| **Average** | **~0.84** | All tasks passed |
 
 Success threshold: 0.60 per task.
 
@@ -196,9 +200,10 @@ python inference.py
 
 Expected output format:
 ```
-[START] task=task1_plaintext env=dataprivacy-env model=meta-llama/Llama-3.1-8B-Instruct
-[STEP] step=1 action={"tool": "read_file", ...} reward=0.00 done=false error=null
-[END] success=true steps=10 score=1.00 rewards=0.00,0.20,0.20,...
+[START] task=task1_plaintext env=dataprivacy-env model=llama-3.3-70b-versatile
+[STEP] step=1 action={"tool": "read_file", "file_path": "server_logs.txt"} reward=0.05 done=false error=null
+[STEP] step=2 action={"tool": "redact_text", ...} reward=0.20 done=false error=null
+[END] success=true steps=10 score=0.825 rewards=0.05,0.20,0.20,0.20,0.20,0.20,0.20,0.20,0.20,0.00
 ```
 
 ---
