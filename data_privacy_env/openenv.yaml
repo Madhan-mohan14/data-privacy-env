@@ -23,11 +23,11 @@ tasks:
     max_reward: 0.999
   - id: level_2
     difficulty: medium
-    description: Single CSV database, 6 PII items (structured data with headers).
+    description: Two text files (server_logs.txt + incident_report.txt), 9 PII items (3 names, 3 emails, 3 phones).
     max_reward: 0.999
   - id: level_3
     difficulty: hard
-    description: Two files, 9 PII items including obfuscated forms (john[at]email.com).
+    description: Three files, 9 PII items in obfuscated forms (john [at] email [dot] com, phone dash formats).
     max_reward: 0.999
   - id: level_4
     difficulty: expert
