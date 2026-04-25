@@ -49,6 +49,8 @@ def _env_factory() -> ComplianceGuardEnv:
     return ComplianceGuardEnv()
 
 
+from fastapi.responses import RedirectResponse, JSONResponse
+
 app = create_app(
     _env_factory,
     DataPrivacyAction,
@@ -56,6 +58,16 @@ app = create_app(
     env_name="complianceguard_env",
     max_concurrent_envs=64,
 )
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/health")
+def health():
+    return JSONResponse({"status": "ok", "env": "complianceguard_env"})
 
 
 def main(host: str = "0.0.0.0", port: int = 7860):
