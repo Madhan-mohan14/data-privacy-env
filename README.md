@@ -1,3 +1,14 @@
+---
+title: ComplianceGuard Data Privacy Env
+emoji: 🔒
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # DataPrivacyEnv
 
 A reinforcement learning environment for training AI agents to detect and redact Personally Identifiable Information (PII) from real-world document formats. Built for the **Meta x HuggingFace OpenEnv Hackathon**.
