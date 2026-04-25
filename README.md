@@ -1,12 +1,19 @@
 ---
-title: ComplianceGuard Data Privacy Env
+title: DataPrivacyEnv
 emoji: 🔒
 colorFrom: blue
-colorTo: purple
+colorTo: indigo
 sdk: docker
 app_port: 7860
+base_path: /web
 pinned: false
 license: mit
+tags:
+  - openenv
+  - reinforcement-learning
+  - privacy
+  - pii
+  - gdpr
 ---
 
 # DataPrivacyEnv
