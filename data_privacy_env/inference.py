@@ -5,13 +5,12 @@ Runs the env in-process (same pattern as TRL training) — avoids the
 stateless HTTP endpoints which create/destroy a fresh env per request.
 
 Usage:
-    python inference.py                    # run L1+L3 baseline (30 episodes)
+    python inference.py                    # run all 4 levels baseline
     python inference.py --level 1          # single level
     python inference.py --episodes 5       # quick smoke test
 
-Required env vars (one of):
-    HF_TOKEN        HuggingFace token (uses api-inference.huggingface.co + Qwen3)
-    GROQ_API_KEY    Groq API key (fallback)
+Required env var:
+    HF_TOKEN        HuggingFace token (uses router.huggingface.co + Qwen2.5-7B)
 """
 
 import json as _json
@@ -21,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from openai import OpenAI  # Groq uses OpenAI-compatible API
+from openai import OpenAI
 
 try:
     from server.data_privacy_env_environment import ComplianceGuardEnv
@@ -33,19 +32,14 @@ except ImportError:
     from models import DataPrivacyAction
 
 # ---------------------------------------------------------------------------
-# Config — supports both Groq and HF router automatically
+# Config — HuggingFace router only
 # ---------------------------------------------------------------------------
-_GROQ_KEY: str = os.getenv("GROQ_API_KEY", "")
-_HF_TOKEN: str = os.getenv("HF_TOKEN", "")
+API_KEY: str = os.getenv("HF_TOKEN", "")
+BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
 
-if _GROQ_KEY:
-    API_KEY: str = _GROQ_KEY
-    BASE_URL: str = "https://api.groq.com/openai/v1"
-    MODEL_NAME: str = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
-else:
-    API_KEY = _HF_TOKEN
-    BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-    MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
+if not API_KEY:
+    raise RuntimeError("HF_TOKEN environment variable is required. Set it with: export HF_TOKEN=hf_...")
 
 MAX_STEPS: int = 30
 MAX_TOKENS: int = 512
@@ -450,5 +444,5 @@ if __name__ == "__main__":
     parser.add_argument("--seeded", action="store_true", help="Use seed=i for episode i (produces baseline_results_seeded.json)")
     args = parser.parse_args()
 
-    levels = [args.level] if args.level else [1, 3]
+    levels = [args.level] if args.level else [1, 2, 3, 4]
     run_baseline(levels=levels, n_episodes=args.episodes, seeded=args.seeded)
