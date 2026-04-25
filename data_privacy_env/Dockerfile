@@ -16,6 +16,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
 
+ENV ENABLE_WEB_INTERFACE=true
+
 EXPOSE 7860
 
 CMD ["/bin/sh", "-c", ".venv/bin/uvicorn server.app:app --host 0.0.0.0 --port 7860"]
