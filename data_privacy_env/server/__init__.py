@@ -6,6 +6,6 @@
 
 """Data Privacy Env environment server components."""
 
-from .data_privacy_env_environment import DataPrivacyEnvironment
+from .data_privacy_env_environment import ComplianceGuardEnv
 
-__all__ = ["DataPrivacyEnvironment"]
+__all__ = ["ComplianceGuardEnv"]

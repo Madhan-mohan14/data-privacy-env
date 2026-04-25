@@ -36,17 +36,19 @@ class DataPrivacyAction(Action):
     message: str = Field(..., description="""
     Send a JSON string with one of these tools:
 
-    List files:
+    SCAN phase tools:
     {"tool": "list_files", "directory": "."}
-
-    Read a file:
     {"tool": "read_file", "file_path": "server_logs.txt"}
+    {"tool": "flag_candidate", "text": "john@email.com", "file_path": "server_logs.txt", "pii_type": "EMAIL"}
+    {"tool": "advance_phase"}
 
-    Redact PII:
-    {"tool": "redact_text", "file_path": "server_logs.txt",
-     "target_string": "john@email.com", "replacement": "[REDACTED]"}
+    CLASSIFY phase tools:
+    {"tool": "list_candidates"}
+    {"tool": "classify_candidate", "candidate_id": "c0", "confirmed": true}
+    {"tool": "advance_phase"}
 
-    Submit when done:
+    REDACT phase tools:
+    {"tool": "redact_span", "candidate_id": "c0"}
     {"tool": "submit"}
     """)
 
@@ -55,8 +57,8 @@ class DataPrivacyObservation(Observation):
     task_id: str = Field(default="", description="Current task ID")
     task_description: str = Field(default="", description="What the agent must do")
     available_tools: list[str] = Field(
-        default=["list_files", "read_file", "redact_text", "submit"],
-        description="Tools you can use"
+        default=["list_files", "read_file", "flag_candidate", "advance_phase"],
+        description="Tools you can use in the current phase"
     )
     last_action_result: str = Field(default="", description="Result of last action")
     last_reward: float = Field(default=0.0, description="Reward from last step")
@@ -65,3 +67,10 @@ class DataPrivacyObservation(Observation):
     step_number: int = Field(default=0, description="Current step")
     max_steps: int = Field(default=25, description="Max steps allowed")
     done: bool = Field(default=False, description="Whether the episode has ended")
+    reward: float = Field(default=0.0, description="Step or terminal reward")
+    agent_phase: str = Field(default="SCAN", description="Current phase: SCAN|CLASSIFY|REDACT")
+    curriculum_level: int = Field(default=1, description="Difficulty level 1-4")
+    candidate_count: int = Field(default=0, description="Number of flagged candidates")
+    classified_count: int = Field(default=0, description="Number of confirmed PII candidates")
+    last_candidate_id: str | None = Field(default=None, description="ID of last flagged candidate")
+    metrics: dict = Field(default_factory=dict, description="Episode metrics (scan_recall, precision, redact_completeness)")

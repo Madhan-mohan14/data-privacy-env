@@ -6,25 +6,30 @@ runtime: fastapi
 app: server.app:app
 port: 7860
 description: >
-  PII Redaction and GDPR Compliance RL Environment.
-  Agent learns to find and redact personally identifiable
-  information from files without breaking file structure.
+  ComplianceGuard — 3-phase PII Redaction RL Environment.
+  Agent learns SCAN → CLASSIFY → REDACT workflow across 4 curriculum levels.
+  Real enterprise GDPR/HIPAA compliance task with adaptive difficulty.
 tags:
   - openenv
   - privacy
   - gdpr
   - pii
   - compliance
+  - reinforcement-learning
 tasks:
-  - id: task1_plaintext
+  - id: level_1
     difficulty: easy
-    description: Redact emails and phone numbers from server logs
-    max_reward: 2.0
-  - id: task2_csv
+    description: Single server log, 3 PII items (name, email, phone). Clear text.
+    max_reward: 0.999
+  - id: level_2
     difficulty: medium
-    description: Redact name and SSN from CSV without breaking format
-    max_reward: 2.0
-  - id: task3_json
+    description: Single CSV database, 6 PII items (structured data with headers).
+    max_reward: 0.999
+  - id: level_3
     difficulty: hard
-    description: Cross-file contextual redaction in JSON medical records
-    max_reward: 2.0
+    description: Two files, 9 PII items including obfuscated forms (john[at]email.com).
+    max_reward: 0.999
+  - id: level_4
+    difficulty: expert
+    description: Three files, 9 PII items plus red herrings (test@example.com). Must classify precisely.
+    max_reward: 0.999

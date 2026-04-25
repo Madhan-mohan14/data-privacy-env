@@ -37,32 +37,24 @@ except Exception as e:  # pragma: no cover
 
 try:
     from ..models import DataPrivacyAction, DataPrivacyObservation
-    from .data_privacy_env_environment import DataPrivacyEnvironment
+    from .data_privacy_env_environment import ComplianceGuardEnv
 except ImportError:
     import sys, os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from models import DataPrivacyAction, DataPrivacyObservation
-    from server.data_privacy_env_environment import DataPrivacyEnvironment
+    from server.data_privacy_env_environment import ComplianceGuardEnv
 
 
-# Singleton environment instance so state is preserved between HTTP /reset and /step calls.
-# The HTTP handlers call _env_factory() on every request; returning the same instance
-# ensures reset() and step() operate on shared state.  Environment.close() is a no-op
-# by default so the handlers' finally:_env.close() is safe.
-_singleton_env = DataPrivacyEnvironment()
+def _env_factory() -> ComplianceGuardEnv:
+    return ComplianceGuardEnv()
 
 
-def _env_factory() -> DataPrivacyEnvironment:
-    return _singleton_env
-
-
-# Create the app with web interface and README integration
 app = create_app(
     _env_factory,
     DataPrivacyAction,
     DataPrivacyObservation,
-    env_name="data_privacy_env",
-    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+    env_name="complianceguard_env",
+    max_concurrent_envs=64,
 )
 
 

@@ -1,0 +1,59 @@
+# Secrets — NEVER commit
+.env
+*.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Claude Code internals (not needed in repo)
+.claude/
+.agents/
+
+# Training artefacts
+checkpoints/
+wandb/
+runs/
+*.safetensors
+*.bin
+*.gguf
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+*.tar
+
+# Logs
+*.log

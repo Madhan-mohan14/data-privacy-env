@@ -5,443 +5,369 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
-import csv
-import io
 import random
-import string
 from uuid import uuid4
+
 from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
 try:
     from ..models import DataPrivacyAction, DataPrivacyObservation
+    from ..curriculum import CurriculumManager, generate_task_for_level
 except ImportError:
     from models import DataPrivacyAction, DataPrivacyObservation
-
-# ---------------------------------------------------------------------------
-# PII pools for randomization — each episode generates fresh data
-# ---------------------------------------------------------------------------
-_FIRST_NAMES = [
-    "Alice", "Bob", "Carol", "David", "Emma", "Frank", "Grace", "Henry",
-    "Iris", "Jack", "Karen", "Leo", "Maria", "Nathan", "Olivia", "Peter",
-    "Quinn", "Rachel", "Samuel", "Tina",
-]
-_LAST_NAMES = [
-    "Johnson", "Martinez", "White", "Brown", "Davis", "Wilson",
-    "Anderson", "Taylor", "Thomas", "Jackson", "Harris", "Clark",
-    "Lewis", "Robinson", "Walker", "Hall",
-]
-_EMAIL_DOMAINS = [
-    "gmail.com", "yahoo.com", "company.com", "email.org",
-    "domain.co.uk", "internal.org", "private.com", "work.net",
-    "corp.io", "secure.org",
-]
-_COLORS = ["blue", "green", "red", "purple", "orange", "yellow", "pink", "cyan"]
-_DIAGNOSES = [
-    "Type 2 Diabetes", "Hypertension", "Asthma", "Arthritis",
-    "Chronic Migraine", "Anemia", "Hypothyroidism", "GERD",
-    "Sleep Apnea", "Osteoporosis",
-]
-_MEDICATIONS = [
-    "Metformin 500mg", "Lisinopril 10mg", "Albuterol 90mcg",
-    "Levothyroxine 50mcg", "Omeprazole 20mg", "Atorvastatin 40mg",
-    "Amlodipine 5mg", "Sertraline 50mg",
-]
-_LOG_EVENTS = [
-    ("ERROR", "logged in from"),
-    ("INFO", "support contact:"),
-    ("WARN", "call us at"),
-    ("INFO", "backup contact"),
-    ("ERROR", "reset password"),
-    ("INFO", "emergency:"),
-    ("WARN", "user {} connected"),
-    ("INFO", "hotline:"),
-]
-_LOG_IPS = ["192.168.1.1", "10.0.0.5", "172.16.0.3", "192.168.0.100"]
+    from curriculum import CurriculumManager, generate_task_for_level
 
 
-def _rand_email(first: str, last: str) -> str:
-    domain = random.choice(_EMAIL_DOMAINS)
-    sep = random.choice([".", "_", ""])
-    return f"{first.lower()}{sep}{last.lower()}@{domain}"
+PHASE_TOOLS: dict[str, list[str]] = {
+    "SCAN": ["list_files", "read_file", "flag_candidate", "advance_phase"],
+    "CLASSIFY": ["list_candidates", "classify_candidate", "advance_phase"],
+    "REDACT": ["redact_span", "submit"],
+}
+
+_curriculum = CurriculumManager()
 
 
-def _rand_phone() -> str:
-    area = random.randint(200, 999)
-    mid = random.randint(100, 999)
-    end = random.randint(1000, 9999)
-    fmt = random.choice(["paren", "dot", "intl"])
-    if fmt == "paren":
-        return f"({area}) {mid}-{end}"
-    elif fmt == "dot":
-        return f"{area}.{mid}.{end}"
-    else:
-        return f"+1-{area}-{mid}-{end}"
-
-
-def _rand_ssn() -> str:
-    return f"{random.randint(100,999)}-{random.randint(10,99)}-{random.randint(1000,9999)}"
-
-
-def _rand_insurance(patient_id: int) -> str:
-    suffix = "".join(random.choices(string.ascii_uppercase, k=3))
-    return f"INS-{patient_id}-{suffix}"
-
-
-def _rand_dob() -> str:
-    year = random.randint(1950, 2000)
-    month = random.randint(1, 12)
-    day = random.randint(1, 28)
-    return f"{year}-{month:02d}-{day:02d}"
-
-
-def _generate_task1() -> dict:
-    """Generate task1: random emails and phone numbers in server_logs.txt."""
-    people = random.sample(
-        [(f, l) for f in _FIRST_NAMES for l in _LAST_NAMES], 4
-    )
-    emails = [_rand_email(f, l) for f, l in people]
-    phones = [_rand_phone() for _ in range(4)]
-    ip = random.choice(_LOG_IPS)
-
-    dates = ["2026-01-01", "2026-01-01", "2026-01-02", "2026-01-02",
-             "2026-01-03", "2026-01-03", "2026-01-04", "2026-01-04"]
-    log_lines = [
-        f"{dates[0]} ERROR user {emails[0]} logged in from {ip}",
-        f"{dates[1]} INFO support contact: {emails[1]}",
-        f"{dates[2]} WARN call us at {phones[0]} for help",
-        f"{dates[3]} INFO backup contact {phones[1]}",
-        f"{dates[4]} ERROR {emails[2]} reset password",
-        f"{dates[5]} INFO emergency: {phones[2]}",
-        f"{dates[6]} WARN user {emails[3]} connected",
-        f"{dates[7]} INFO hotline: {phones[3]}",
-    ]
-    content = "\n".join(log_lines) + "\n"
-
-    return {
-        "description": (
-            "TASK 1 (Easy): Redact all PII from server_logs.txt. "
-            "Find and redact: 4 email addresses and 4 phone numbers. "
-            "Use list_files, read_file, redact_text tools, then submit."
-        ),
-        "files": {"server_logs.txt": content},
-        "pii_list": emails + phones,
-        "safe_list": [ip],
-        "max_steps": 25,
-    }
-
-
-def _generate_task2() -> dict:
-    """Generate task2: random names and SSNs in customers.csv."""
-    people = random.sample(
-        [(f, l) for f in _FIRST_NAMES for l in _LAST_NAMES], 4
-    )
-    colors = random.sample(_COLORS, 4)
-    rows = []
-    pii_list = []
-    safe_list = []
-    for i, ((first, last), color) in enumerate(zip(people, colors), start=1001):
-        name = f"{first} {last}"
-        ssn = _rand_ssn()
-        email = _rand_email(first, last)
-        rows.append(f"{i},{name},{ssn},{email},{color}")
-        pii_list.extend([name, ssn])
-        safe_list.extend([str(i), email, color])
-
-    content = "user_id,name,ssn,email,favorite_color\n" + "\n".join(rows) + "\n"
-
-    return {
-        "description": (
-            "TASK 2 (Medium): Redact PII from customers.csv. "
-            "Redact the 'name' and 'ssn' columns ONLY. "
-            "Do NOT touch user_id, email, or favorite_color. "
-            "CSV structure must remain valid after redaction."
-        ),
-        "files": {"customers.csv": content},
-        "pii_list": pii_list,
-        "safe_list": safe_list,
-        "max_steps": 20,
-    }
-
-
-def _generate_task3() -> dict:
-    """Generate task3: random patient breach with cross-file redaction."""
-    # Generate 3 patients; one random target
-    all_ids = random.sample(range(1000, 9999), 3)
-    target_id = all_ids[1]  # middle one is always the target
-
-    patients = []
-    for pid in all_ids:
-        first = random.choice(_FIRST_NAMES)
-        last = random.choice(_LAST_NAMES)
-        diag = random.choice(_DIAGNOSES)
-        if pid == target_id:
-            patients.append({
-                "id": pid,
-                "name": f"{first} {last}",
-                "diagnosis": diag,
-                "medication": random.choice(_MEDICATIONS),
-                "ssn": _rand_ssn(),
-                "phone": _rand_phone(),
-                "email": _rand_email(first, last),
-                "insurance_id": _rand_insurance(pid),
-                "date_of_birth": _rand_dob(),
-            })
-        else:
-            patients.append({"id": pid, "name": f"{first} {last}", "diagnosis": diag})
-
-    target = next(p for p in patients if p["id"] == target_id)
-    decoys = [p for p in patients if p["id"] != target_id]
-
-    breach_content = (
-        "SECURITY INCIDENT REPORT\n"
-        f"Date: 2026-04-{random.randint(1,8):02d}\n"
-        "Severity: HIGH\n"
-        f"Patient ID: {target_id} data was compromised in the breach.\n"
-        "Immediate action required.\n"
-    )
-
-    pii_list = [
-        target["name"], target["diagnosis"], target["medication"],
-        target["ssn"], target["phone"], target["email"],
-        target["insurance_id"], target["date_of_birth"],
-    ]
-    safe_list = []
-    for d in decoys:
-        safe_list.extend([d["name"], d["diagnosis"]])
-
-    return {
-        "description": (
-            "TASK 3 (Hard): Cross-file PII redaction. "
-            "Step 1: Read breach_report.txt to find the compromised Patient ID. "
-            "Step 2: Read medical_database.json to locate that patient. "
-            "Step 3: Redact ALL sensitive fields of the compromised patient: "
-            "name, diagnosis, medication, ssn, phone, email, insurance_id, date_of_birth. "
-            "Do NOT touch any other patients. JSON must remain valid after redaction."
-        ),
-        "files": {
-            "breach_report.txt": breach_content,
-            "medical_database.json": json.dumps(patients, indent=2),
-        },
-        "target_patient_id": target_id,
-        "pii_list": pii_list,
-        "safe_list": safe_list,
-        "max_steps": 20,
-    }
-
-
-class DataPrivacyEnvironment(Environment):
+class ComplianceGuardEnv(Environment):
     """
-    DataPrivacyEnv — PII Redaction RL Environment.
-    Agent learns to find and redact sensitive data across 3 tasks.
+    ComplianceGuard — 3-phase PII redaction RL environment.
+
+    Phases: SCAN → CLASSIFY → REDACT
+    Phase gate enforced via raise ValueError (caught by TRL natively + HTTP try/except).
+    Near-binary reward: 1.0 perfect / 0.3+0.6*product partial / 0.05 floor.
     """
 
-    SUPPORTS_CONCURRENT_SESSIONS: bool = False
+    SUPPORTS_CONCURRENT_SESSIONS: bool = True
 
-    _VALID_TASKS = {"task1_plaintext", "task2_csv", "task3_json"}
-    _GENERATORS = {
-        "task1_plaintext": _generate_task1,
-        "task2_csv": _generate_task2,
-        "task3_json": _generate_task3,
-    }
+    MAX_STEPS: int = 30
 
     def __init__(self):
         self._state = State(episode_id=str(uuid4()), step_count=0)
-        self.task_id = "task1_plaintext"
-        self._task_data: dict = {}
-        self.virtual_fs = {}
-        self.cumulative_reward = 0.0
-        self.found_patient_id = False
-        self.done = False
+        self.phase: str = "SCAN"
+        self.level: int = 1
+        self.virtual_fs: dict[str, str] = {}
+        self.pii_list: list[str] = []
+        self.candidates: dict[str, dict] = {}  # cid -> {text, file_path, pii_type, confirmed}
+        self._next_cid: int = 0
+        self.done: bool = False
+        self.reward: float = 0.0
+        self.cumulative_reward: float = 0.0
+        self._task_description: str = ""
 
-    def reset(self, task_id: str = "task1_plaintext") -> DataPrivacyObservation:
-        task_id = task_id if task_id in self._VALID_TASKS else "task1_plaintext"
-        self.task_id = task_id
-        self._task_data = self._GENERATORS[task_id]()
-        task = self._task_data
-        self.virtual_fs = {k: v for k, v in task["files"].items()}
-        self.cumulative_reward = 0.0
-        self.found_patient_id = False
+    # ------------------------------------------------------------------
+    # OpenEnv required interface
+    # ------------------------------------------------------------------
+
+    def reset(self, seed: int | None = None, level: int | None = None, **kwargs) -> DataPrivacyObservation:
+        if seed is not None:
+            random.seed(seed)
+
+        self.level = level if level is not None else _curriculum.get_level()
+        files, pii_list = generate_task_for_level(self.level)
+
+        self.virtual_fs = dict(files)
+        self.pii_list = list(pii_list)
+        self.candidates = {}
+        self._next_cid = 0
+        self.phase = "SCAN"
         self.done = False
+        self.reward = 0.0
+        self.cumulative_reward = 0.0
         self._state = State(episode_id=str(uuid4()), step_count=0)
-
-        return DataPrivacyObservation(
-            task_id=self.task_id,
-            task_description=task["description"],
-            available_tools=["list_files", "read_file", "redact_text", "submit"],
-            last_action_result="Environment reset. Start with list_files or read_file.",
-            last_reward=0.0,
-            cumulative_reward=0.0,
-            files_in_scope=list(self.virtual_fs.keys()),
-            step_number=0,
-            max_steps=task["max_steps"],
-            done=False,
-            reward=0.0,
+        self._task_description = (
+            f"[Level {self.level}] Redact all PII from {len(self.virtual_fs)} file(s). "
+            "Phase 1 SCAN: read files and flag PII candidates. "
+            "Phase 2 CLASSIFY: confirm or reject each candidate. "
+            "Phase 3 REDACT: redact confirmed candidates and submit."
         )
 
-    def step(self, action: DataPrivacyAction) -> DataPrivacyObservation:  # type: ignore[override]
-        self._state.step_count += 1
-        task = self._task_data
-        reward = 0.0
-        result_msg = ""
-        done = False
+        return self._initial_obs()
 
-        # Parse the JSON message from agent
+    def step(self, action: DataPrivacyAction, **kwargs) -> DataPrivacyObservation:
+        self._state.step_count += 1
+
+        # Enforce step limit — OpenEnv requires reward strictly in (0, 1), never 0.0
+        if self._state.step_count >= self.MAX_STEPS and not self.done:
+            self.reward, _ = self._compute_reward()
+            self.done = True
+            _curriculum.record_episode(self.reward)
+            return self._make_obs(
+                self.reward,
+                f"Max steps ({self.MAX_STEPS}) reached. Episode terminated.",
+                done=True,
+            )
+
         try:
             parsed = json.loads(action.message)
             tool = parsed.get("tool", "")
         except (json.JSONDecodeError, AttributeError):
-            return DataPrivacyObservation(
-                task_id=self.task_id,
-                task_description=task["description"],
-                available_tools=["list_files", "read_file", "redact_text", "submit"],
-                last_action_result="Error: Send valid JSON with a 'tool' field.",
-                last_reward=-0.05,
-                cumulative_reward=self.cumulative_reward,
-                files_in_scope=list(self.virtual_fs.keys()),
-                step_number=self._state.step_count,
-                max_steps=task["max_steps"],
-                done=False,
-                reward=-0.05,
-            )
+            return self._make_obs(-0.05, "Error: send valid JSON with a 'tool' field.")
 
-        # Max steps check
-        if self._state.step_count >= task["max_steps"]:
-            done = True
-            result_msg = "Max steps reached. Episode ending."
+        method = getattr(self, f"_tool_{tool}", None)
+        if method is None:
+            return self._make_obs(-0.05, f"Unknown tool '{tool}'. Allowed in {self.phase}: {PHASE_TOOLS[self.phase]}")
 
-        elif tool == "list_files":
-            result_msg = f"Files available: {list(self.virtual_fs.keys())}"
-            reward = 0.0
+        try:
+            result = method(parsed)
+        except ValueError as e:
+            return self._make_obs(-0.05, str(e))
 
-        elif tool == "read_file":
-            file_path = parsed.get("file_path", "")
-            if file_path not in self.virtual_fs:
-                result_msg = f"Error: '{file_path}' not found. Available: {list(self.virtual_fs.keys())}"
-                reward = -0.05
-            else:
-                content = self.virtual_fs[file_path]
-                result_msg = f"=== {file_path} ===\n{content}"
-                reward = 0.05  # small reward for reading a file (ensures min score > 0)
-                # Task 3 extra credit for reading breach report
-                if (self.task_id == "task3_json" and
-                        file_path == "breach_report.txt" and
-                        not self.found_patient_id):
-                    self.found_patient_id = True
-                    reward = 0.15
-                    result_msg += "\n[HINT] Find Patient ID in this file, then check medical_database.json"
+        if self.done:
+            step_reward = self.reward
+            _curriculum.record_episode(step_reward)
+            return self._make_obs(step_reward, result, done=True)
 
-        elif tool == "redact_text":
-            file_path = parsed.get("file_path", "")
-            target = parsed.get("target_string", "")
-            replacement = parsed.get("replacement", "[REDACTED]")
-
-            if file_path not in self.virtual_fs:
-                result_msg = f"Error: '{file_path}' not found."
-                reward = -0.05
-            elif not target:
-                result_msg = "Error: 'target_string' required."
-                reward = -0.05
-            elif target not in self.virtual_fs[file_path]:
-                result_msg = f"'{target}' not found in {file_path}."
-                reward = -0.05
-            else:
-                old_content = self.virtual_fs[file_path]
-                new_content = old_content.replace(target, replacement)
-                self.virtual_fs[file_path] = new_content
-
-                pii_list = task.get("pii_list", [])
-                safe_list = task.get("safe_list", [])
-
-                if target in pii_list:
-                    reward = +0.2
-                    result_msg = f"Correctly redacted PII: '{target}'"
-                elif target in safe_list:
-                    reward = -0.2
-                    result_msg = f"False positive — '{target}' is NOT PII!"
-                else:
-                    reward = -0.1
-                    result_msg = f"'{target}' redacted but not in known PII list."
-
-                # CSV structure validation
-                if (self.task_id == "task2_csv" and
-                        "customers.csv" in self.virtual_fs):
-                    try:
-                        list(csv.reader(
-                            io.StringIO(self.virtual_fs["customers.csv"])
-                        ))
-                    except csv.Error:
-                        reward = -1.0
-                        done = True
-                        result_msg = "CRITICAL: CSV structure broken! Episode failed."
-
-                # JSON structure validation
-                if (self.task_id == "task3_json" and
-                        "medical_database.json" in self.virtual_fs):
-                    try:
-                        json.loads(self.virtual_fs["medical_database.json"])
-                    except json.JSONDecodeError:
-                        reward = -1.0
-                        done = True
-                        result_msg = "CRITICAL: JSON structure broken! Episode failed."
-
-        elif tool == "submit":
-            done = True
-            penalty = 0.0
-            pii_list = task.get("pii_list", [])
-
-            # Penalize missed PII
-            for pii in pii_list:
-                for content in self.virtual_fs.values():
-                    if pii in content:
-                        penalty += 0.3
-                        break
-
-            # Task 3 — check correct patient redacted
-            if self.task_id == "task3_json":
-                try:
-                    target_id = self._task_data.get("target_patient_id")
-                    data = json.loads(self.virtual_fs["medical_database.json"])
-                    patient = next((p for p in data if p["id"] == target_id), None)
-                    if patient and patient.get("diagnosis") != "[REDACTED]":
-                        penalty += 0.4
-                    # Penalize wrong patients touched
-                    for p in data:
-                        if p["id"] != target_id and p.get("diagnosis") == "[REDACTED]":
-                            penalty += 0.5
-                except json.JSONDecodeError:
-                    penalty += 1.0
-
-            reward = -penalty
-            result_msg = (
-                f"Episode complete. "
-                f"Penalty for missed PII: -{penalty:.2f}. "
-                f"Total cumulative: {self.cumulative_reward + reward:.2f}"
-            )
-        else:
-            result_msg = f"Unknown tool '{tool}'. Use: list_files, read_file, redact_text, submit"
-            reward = -0.05
-
-        self.cumulative_reward += reward
-        # Clamp to (0.01, 1.99) so normalized score = cumulative/2.0 is always
-        # strictly in (0.005, 0.995) — satisfies validator requirement of (0, 1) exclusive.
-        self.cumulative_reward = max(0.01, min(1.99, self.cumulative_reward))
-        self.done = done
-
-        return DataPrivacyObservation(
-            task_id=self.task_id,
-            task_description=task["description"],
-            available_tools=["list_files", "read_file", "redact_text", "submit"],
-            last_action_result=result_msg,
-            last_reward=round(reward, 3),
-            cumulative_reward=round(self.cumulative_reward, 3),
-            files_in_scope=list(self.virtual_fs.keys()),
-            step_number=self._state.step_count,
-            max_steps=task["max_steps"],
-            done=done,
-            reward=round(reward, 3),
-        )
+        return self._make_obs(0.0, result)
 
     @property
     def state(self) -> State:
         return self._state
+
+    # ------------------------------------------------------------------
+    # Phase gate
+    # ------------------------------------------------------------------
+
+    def _require_phase(self, required: str, tool_name: str) -> None:
+        if self.phase != required:
+            raise ValueError(
+                f"'{tool_name}' is only allowed in {required} phase. "
+                f"Currently in {self.phase}. Allowed tools: {PHASE_TOOLS[self.phase]}"
+            )
+
+    # ------------------------------------------------------------------
+    # SCAN phase tools
+    # ------------------------------------------------------------------
+
+    def _tool_list_files(self, parsed: dict) -> str:
+        self._require_phase("SCAN", "list_files")
+        return f"Files: {list(self.virtual_fs.keys())}"
+
+    def _tool_read_file(self, parsed: dict) -> str:
+        self._require_phase("SCAN", "read_file")
+        fp = parsed.get("file_path", "")
+        if fp not in self.virtual_fs:
+            raise ValueError(f"'{fp}' not found. Available: {list(self.virtual_fs.keys())}")
+        return f"=== {fp} ===\n{self.virtual_fs[fp]}"
+
+    def _tool_flag_candidate(self, parsed: dict) -> str:
+        self._require_phase("SCAN", "flag_candidate")
+        text = parsed.get("text", "").strip()
+        file_path = parsed.get("file_path", "")
+        pii_type = parsed.get("pii_type", "OTHER")
+
+        if not text:
+            raise ValueError("'text' field required for flag_candidate.")
+        if file_path and file_path not in self.virtual_fs:
+            raise ValueError(f"'{file_path}' not in scope.")
+
+        existing = [cid for cid, c in self.candidates.items()
+                    if c["text"].strip() == text.strip()]
+        if existing:
+            return f"Already flagged as {existing[0]}. Use that candidate_id instead."
+
+        cid = f"c{self._next_cid}"
+        self._next_cid += 1
+        self.candidates[cid] = {
+            "text": text,
+            "file_path": file_path,
+            "pii_type": pii_type,
+            "confirmed": None,
+            "redacted": False,
+        }
+        return f"Flagged {cid}: {pii_type} | {text!r}"
+
+    def _tool_advance_phase(self, parsed: dict) -> str:
+        if self.phase == "SCAN":
+            if not self.candidates:
+                raise ValueError(
+                    "No candidates flagged. Use flag_candidate before advancing."
+                )
+            self.phase = "CLASSIFY"
+            return (
+                f"Advanced to CLASSIFY. {len(self.candidates)} candidate(s) to review. "
+                f"Use list_candidates then classify_candidate for each."
+            )
+        elif self.phase == "CLASSIFY":
+            unclassified = [c for c, v in self.candidates.items() if v["confirmed"] is None]
+            if unclassified:
+                raise ValueError(
+                    f"Classify all candidates first. Unclassified: {unclassified}"
+                )
+            self.phase = "REDACT"
+            confirmed = [c for c, v in self.candidates.items() if v["confirmed"]]
+            return (
+                f"Advanced to REDACT. {len(confirmed)} confirmed PII candidate(s). "
+                "Use redact_span for each, then submit."
+            )
+        else:
+            raise ValueError("Already in REDACT phase. Use redact_span and submit.")
+
+    # ------------------------------------------------------------------
+    # CLASSIFY phase tools
+    # ------------------------------------------------------------------
+
+    def _tool_list_candidates(self, parsed: dict) -> str:
+        self._require_phase("CLASSIFY", "list_candidates")
+        if not self.candidates:
+            return "No candidates flagged."
+        lines = []
+        for cid, info in self.candidates.items():
+            status = {True: "CONFIRMED", False: "REJECTED", None: "PENDING"}[info["confirmed"]]
+            lines.append(f"  {cid}: [{status}] {info['pii_type']} | {info['text']!r}")
+        return "Candidates:\n" + "\n".join(lines)
+
+    def _tool_classify_candidate(self, parsed: dict) -> str:
+        self._require_phase("CLASSIFY", "classify_candidate")
+        cid = parsed.get("candidate_id", "")
+        if cid not in self.candidates:
+            raise ValueError(f"Unknown candidate_id '{cid}'. Use list_candidates.")
+        confirmed = parsed.get("confirmed")
+        if confirmed is None:
+            raise ValueError("'confirmed' field required (true or false).")
+        self.candidates[cid]["confirmed"] = bool(confirmed)
+        status = "CONFIRMED" if confirmed else "REJECTED"
+        return f"{cid} {status}: {self.candidates[cid]['text']!r}"
+
+    # ------------------------------------------------------------------
+    # REDACT phase tools
+    # ------------------------------------------------------------------
+
+    def _tool_redact_span(self, parsed: dict) -> str:
+        self._require_phase("REDACT", "redact_span")
+        cid = parsed.get("candidate_id", "")
+        if cid not in self.candidates:
+            raise ValueError(f"Unknown candidate_id '{cid}'.")
+        c = self.candidates[cid]
+        if not c["confirmed"]:
+            raise ValueError(f"'{cid}' was not confirmed as PII. Only redact confirmed candidates.")
+        if c["redacted"]:
+            return f"{cid} already redacted."
+
+        text = c["text"]
+        fp = c["file_path"]
+        if fp and fp in self.virtual_fs and text in self.virtual_fs[fp]:
+            self.virtual_fs[fp] = self.virtual_fs[fp].replace(text, "[REDACTED]")
+        else:
+            # Search all files
+            for fname in self.virtual_fs:
+                if text in self.virtual_fs[fname]:
+                    self.virtual_fs[fname] = self.virtual_fs[fname].replace(text, "[REDACTED]")
+        c["redacted"] = True
+        return f"Redacted {cid}: {text!r} → [REDACTED]"
+
+    def _tool_submit(self, parsed: dict) -> str:
+        self._require_phase("REDACT", "submit")
+        self.reward, metrics = self._compute_reward()
+        self.done = True
+        return (
+            f"Episode complete. reward={self.reward:.4f} | "
+            f"scan_recall={metrics.get('scan_recall', 0):.2f} "
+            f"precision={metrics.get('precision', 0):.2f} "
+            f"redact_completeness={metrics.get('redact_completeness', 0):.2f}"
+        )
+
+    # ------------------------------------------------------------------
+    # Reward computation (near-binary)
+    # ------------------------------------------------------------------
+
+    def _compute_reward(self) -> tuple[float, dict]:
+        total_pii = len(self.pii_list)
+        if total_pii == 0:
+            return 0.5, {}
+
+        # scan_recall: fraction of real PII that was flagged as a candidate
+        flagged_texts = {v["text"] for v in self.candidates.values()}
+        scanned_hits = sum(1 for pii in self.pii_list if pii in flagged_texts or
+                           any(pii in ft or ft in pii for ft in flagged_texts))
+        scan_recall = scanned_hits / total_pii
+
+        # precision: among confirmed candidates, fraction that are real PII
+        confirmed = [v for v in self.candidates.values() if v["confirmed"]]
+        if not confirmed:
+            precision = 0.0
+        else:
+            true_positives = sum(
+                1 for c in confirmed
+                if any(c["text"] in pii or pii in c["text"] for pii in self.pii_list)
+            )
+            precision = true_positives / max(1, len(confirmed))
+
+        # redact_completeness: fraction of real PII actually removed from files
+        all_content = "\n".join(self.virtual_fs.values())
+        still_present = sum(1 for pii in self.pii_list if pii in all_content)
+        redact_completeness = 1.0 - (still_present / total_pii)
+
+        if scan_recall >= 0.99 and precision >= 0.99 and redact_completeness >= 0.99:
+            reward = 1.0
+        elif scan_recall >= 0.5 and redact_completeness > 0:
+            reward = 0.3 + 0.6 * (scan_recall * precision * redact_completeness)
+        else:
+            reward = 0.05
+
+        reward = max(0.001, min(0.999, reward))
+        metrics = {
+            "scan_recall": round(scan_recall, 4),
+            "precision": round(precision, 4),
+            "redact_completeness": round(redact_completeness, 4),
+        }
+        return reward, metrics
+
+    # ------------------------------------------------------------------
+    # Observation helpers
+    # ------------------------------------------------------------------
+
+    def _make_obs(
+        self,
+        reward: float,
+        result: str,
+        done: bool = False,
+    ) -> DataPrivacyObservation:
+        self.cumulative_reward += reward
+        confirmed = [c for c, v in self.candidates.items() if v["confirmed"]]
+        last_cid = list(self.candidates.keys())[-1] if self.candidates else None
+        _, metrics = self._compute_reward() if done else (0.0, {})
+
+        return DataPrivacyObservation(
+            task_id=f"level_{self.level}",
+            task_description=self._task_description,
+            available_tools=PHASE_TOOLS[self.phase],
+            last_action_result=result,
+            last_reward=round(reward, 4),
+            cumulative_reward=round(self.cumulative_reward, 4),
+            files_in_scope=list(self.virtual_fs.keys()),
+            step_number=self._state.step_count,
+            max_steps=self.MAX_STEPS,
+            done=done,
+            reward=round(reward, 4),
+            agent_phase=self.phase,
+            curriculum_level=self.level,
+            candidate_count=len(self.candidates),
+            classified_count=len(confirmed),
+            last_candidate_id=last_cid,
+            metrics=metrics,
+        )
+
+    def _initial_obs(self) -> DataPrivacyObservation:
+        return DataPrivacyObservation(
+            task_id=f"level_{self.level}",
+            task_description=self._task_description,
+            available_tools=PHASE_TOOLS["SCAN"],
+            last_action_result=(
+                f"Environment reset. Level {self.level}. "
+                f"Files: {list(self.virtual_fs.keys())}. "
+                "Start with list_files then read_file to scan for PII."
+            ),
+            last_reward=0.001,
+            cumulative_reward=0.0,
+            files_in_scope=list(self.virtual_fs.keys()),
+            step_number=0,
+            max_steps=self.MAX_STEPS,
+            done=False,
+            reward=0.001,  # OpenEnv requires reward strictly > 0.0 on all observations
+            agent_phase="SCAN",
+            curriculum_level=self.level,
+            candidate_count=0,
+            classified_count=0,
+            last_candidate_id=None,
+            metrics={},
+        )

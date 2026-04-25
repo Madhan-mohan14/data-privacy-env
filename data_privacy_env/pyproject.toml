@@ -14,6 +14,7 @@ version = "0.1.0"
 description = "Data Privacy Env environment for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib>=3.10.9",
     # Core OpenEnv runtime (provides FastAPI server + HTTP client types)
     # install from github
     # "openenv-core[core] @ git+https://github.com/meta-pytorch/OpenEnv.git",
@@ -41,5 +42,17 @@ server = "data_privacy_env.server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["data_privacy_env", "data_privacy_env.server"]
-package-dir = { "data_privacy_env" = ".", "data_privacy_env.server" = "server" }
+packages = [
+    "data_privacy_env",
+    "data_privacy_env.server",
+    "data_privacy_env.curriculum",
+    "data_privacy_env.agents",
+    "data_privacy_env.training",
+]
+
+[tool.setuptools.package-dir]
+"data_privacy_env" = "."
+"data_privacy_env.server" = "server"
+"data_privacy_env.curriculum" = "curriculum"
+"data_privacy_env.agents" = "agents"
+"data_privacy_env.training" = "training"
