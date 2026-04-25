@@ -1,0 +1,88 @@
+{
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "provider": "HuggingFace Inference API (router.huggingface.co)",
+  "n_episodes": 11,
+  "results": [
+    {
+      "episode": 0,
+      "level": 1,
+      "steps": 16,
+      "reward": 0.5,
+      "success": false
+    },
+    {
+      "episode": 1,
+      "level": 1,
+      "steps": 19,
+      "reward": 0.4,
+      "success": false
+    },
+    {
+      "episode": 2,
+      "level": 1,
+      "steps": 18,
+      "reward": 0.5,
+      "success": false
+    },
+    {
+      "episode": 3,
+      "level": 2,
+      "steps": 30,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 4,
+      "level": 2,
+      "steps": 30,
+      "reward": 0.3593,
+      "success": false
+    },
+    {
+      "episode": 5,
+      "level": 2,
+      "steps": 30,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 6,
+      "level": 3,
+      "steps": 18,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 7,
+      "level": 3,
+      "steps": 16,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 8,
+      "level": 3,
+      "steps": 18,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 9,
+      "level": 4,
+      "steps": 26,
+      "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 10,
+      "level": 4,
+      "steps": 30,
+      "reward": 0.05,
+      "success": false
+    }
+  ],
+  "success_rate": 0.0,
+  "avg_reward": 0.1918,
+  "gate": "RED",
+  "note": "Qwen2.5-7B pre-training baseline. L1: CLASSIFY rejects emails/phones, avg 0.467. L2: looping bug (repeats same flag_candidate) burns step budget, avg 0.153. L3: obfuscated PII not parsed, avg 0.050. L4: confirms red-herring emails as PII, avg 0.050. Key GRPO targets: multi-type CLASSIFY, loop detection, obfuscation handling."
+}

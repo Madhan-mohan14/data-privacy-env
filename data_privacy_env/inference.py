@@ -9,8 +9,9 @@ Usage:
     python inference.py --level 1          # single level
     python inference.py --episodes 5       # quick smoke test
 
-Required env vars:
-    GROQ_API_KEY    Groq API key
+Required env vars (one of):
+    HF_TOKEN        HuggingFace token (uses api-inference.huggingface.co + Qwen3)
+    GROQ_API_KEY    Groq API key (fallback)
 """
 
 import json as _json
@@ -40,12 +41,11 @@ _HF_TOKEN: str = os.getenv("HF_TOKEN", "")
 if _GROQ_KEY:
     API_KEY: str = _GROQ_KEY
     BASE_URL: str = "https://api.groq.com/openai/v1"
-    # GROQ_MODEL_NAME takes priority; fall back to Groq default (not HF model IDs)
     MODEL_NAME: str = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
 else:
     API_KEY = _HF_TOKEN
     BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-    MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+    MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
 
 MAX_STEPS: int = 30
 MAX_TOKENS: int = 512
@@ -81,9 +81,18 @@ PHASE_SYSTEM: dict[str, str] = {
         '1. {"tool": "list_candidates"}  ← only once if you need the list\n'
         '2. {"tool": "classify_candidate", "candidate_id": "c0", "confirmed": true}  ← for each\n'
         '3. {"tool": "advance_phase"}  ← after ALL classified\n\n'
-        'Real PII → confirmed:true (names, emails, phones, SSNs).\n'
-        'NOT PII → confirmed:false: dates like "2026-01-01", IP addresses like "192.168.1.1",\n'
-        'timestamps, log levels (INFO/ERROR), system paths, and generic text.'
+        'CONFIRMED (confirmed:true) — these ARE personal PII:\n'
+        '  ✅ Person names: "Grace Harris", "John Smith"\n'
+        '  ✅ Email addresses: "john@gmail.com", "bob.davis@work.net"\n'
+        '  ✅ Phone numbers: "555-123-4567", "438.565.1216", "+1-897-555-0123"\n'
+        '  ✅ SSNs: "123-45-6789"\n\n'
+        'REJECTED (confirmed:false) — these are NOT personal PII:\n'
+        '  ❌ Dates: "2026-01-01", "2026-01-02"\n'
+        '  ❌ IP addresses: "192.168.1.1", "10.0.0.5", "172.16.0.3"\n'
+        '  ❌ System/test addresses: "test@example.com", "noreply@system.local", "admin@localhost"\n'
+        '  ❌ Fake/test phones: "000.000.0000"\n'
+        '  ❌ Log metadata: timestamps, INFO/ERROR/WARN, system paths\n\n'
+        'RULE: Emails and phone numbers belonging to real people ARE PII — confirm them!'
     ),
     "REDACT": (
         'You are a PII compliance agent in REDACT phase. Output ONLY a single raw JSON object.\n'
@@ -329,6 +338,8 @@ def run_episode(
     done = False
     steps = 0
 
+    consecutive_loops = 0  # detect model stuck repeating same action
+
     for step in range(1, MAX_STEPS + 1):
         if done:
             break
@@ -337,6 +348,16 @@ def run_episode(
         state.phase = phase
 
         action_json = call_llm(client, phase, obs.last_action_result, state, step)
+
+        # Loop guard: if env says "Already flagged", inject advance_phase after 2 retries
+        if "Already flagged" in obs.last_action_result or "already" in obs.last_action_result.lower():
+            consecutive_loops += 1
+            if consecutive_loops >= 2:
+                print(f"    [LOOP GUARD] Model stuck — injecting advance_phase", flush=True)
+                action_json = '{"tool": "advance_phase"}'
+                consecutive_loops = 0
+        else:
+            consecutive_loops = 0
 
         action = DataPrivacyAction(message=action_json)
         obs = env.step(action)
