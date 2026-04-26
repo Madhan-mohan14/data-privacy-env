@@ -1,71 +1,123 @@
-"""Generate reward baseline plot from baseline_results.json."""
+"""Generate baseline performance plots from baseline_results.json."""
 import json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import numpy as np
 
 with open("baseline_results.json") as f:
     data = json.load(f)
 
 results = data["results"]
-episodes = [r["episode"] for r in results]
-rewards = [r["reward"] for r in results]
-levels = [r["level"] for r in results]
+LEVEL_COLORS = {1: "#2196F3", 2: "#4CAF50", 3: "#FF9800", 4: "#F44336"}
+LEVEL_LABELS = {
+    1: "L1 — clear logs",
+    2: "L2 — multi-file",
+    3: "L3 — obfuscated PII",
+    4: "L4 — red herrings",
+}
 
-colors = {1: "#2196F3", 3: "#FF9800"}
-point_colors = [colors[l] for l in levels]
+# ── per-level stats ──────────────────────────────────────────────────────────
+by_level = {}
+for lvl in [1, 2, 3, 4]:
+    lvl_results = [r for r in results if r["level"] == lvl]
+    if not lvl_results:
+        continue
+    avg = sum(r["reward"] for r in lvl_results) / len(lvl_results)
+    sr  = sum(1 for r in lvl_results if r["success"]) / len(lvl_results)
+    by_level[lvl] = {"avg": avg, "sr": sr, "results": lvl_results}
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+# ── Figure 1: reward by level (bar) + per-episode scatter ────────────────────
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 fig.suptitle(
     f"ComplianceGuard Baseline — {data['model']}\n"
-    f"30 episodes | Success rate: {data['success_rate']:.1%} | Avg reward: {data['avg_reward']:.3f}",
+    f"{data['n_episodes']} episodes | Avg reward: {data['avg_reward']:.3f} | "
+    f"Gate: {data['gate']}",
     fontsize=13, fontweight="bold",
 )
 
-# Left: episode rewards scatter + line
-l1_eps = [r["episode"] for r in results if r["level"] == 1]
-l1_rew = [r["reward"] for r in results if r["level"] == 1]
-l3_eps = [r["episode"] for r in results if r["level"] == 3]
-l3_rew = [r["reward"] for r in results if r["level"] == 3]
-
-ax1.plot(l1_eps, l1_rew, "o-", color="#2196F3", label="Level 1 (simple logs)", linewidth=1.5, markersize=6)
-ax1.plot(l3_eps, l3_rew, "s-", color="#FF9800", label="Level 3 (obfuscated PII)", linewidth=1.5, markersize=6)
-ax1.axhline(0.7, color="#4CAF50", linestyle="--", linewidth=1.5, label="Success threshold (0.7)")
-ax1.axhline(0.05, color="#F44336", linestyle=":", linewidth=1, label="Floor reward (0.05)")
-ax1.set_xlabel("Episode", fontsize=11)
-ax1.set_ylabel("Final Episode Reward", fontsize=11)
-ax1.set_title("Episode Rewards by Level", fontsize=12)
-ax1.legend(fontsize=9)
-ax1.set_ylim(-0.05, 1.1)
-ax1.grid(True, alpha=0.3)
-ax1.set_facecolor("#FAFAFA")
-
-# Right: bar chart — success rate by level
-l1_sr = sum(1 for r in results if r["level"] == 1 and r["success"]) / max(1, len([r for r in results if r["level"] == 1]))
-l3_sr = sum(1 for r in results if r["level"] == 3 and r["success"]) / max(1, len([r for r in results if r["level"] == 3]))
-overall_sr = data["success_rate"]
-
-bars = ax2.bar(
-    ["Level 1\n(easy)", "Level 3\n(hard)", "Overall"],
-    [l1_sr, l3_sr, overall_sr],
-    color=["#2196F3", "#FF9800", "#9C27B0"],
-    width=0.5, alpha=0.85,
+# Left: bar chart — avg reward by level
+ax = axes[0]
+lvls = sorted(by_level.keys())
+avgs = [by_level[l]["avg"] for l in lvls]
+bars = ax.bar(
+    [LEVEL_LABELS[l] for l in lvls],
+    avgs,
+    color=[LEVEL_COLORS[l] for l in lvls],
+    width=0.55, alpha=0.88, edgecolor="white", linewidth=1.5,
 )
-ax2.axhline(0.3, color="#4CAF50", linestyle="--", linewidth=1.5, label="GREEN gate (30%)")
-for bar, val in zip(bars, [l1_sr, l3_sr, overall_sr]):
-    ax2.text(bar.get_x() + bar.get_width() / 2, val + 0.02, f"{val:.0%}", ha="center", fontsize=12, fontweight="bold")
-ax2.set_ylabel("Success Rate (reward ≥ 0.7)", fontsize=11)
-ax2.set_title("Success Rate by Difficulty Level", fontsize=12)
+ax.axhline(0.70, color="#388E3C", linestyle="--", linewidth=1.8, label="Success threshold (0.70)")
+ax.axhline(0.05, color="#B71C1C", linestyle=":", linewidth=1.2, label="Floor reward (0.05)")
+for bar, val in zip(bars, avgs):
+    ax.text(bar.get_x() + bar.get_width() / 2, val + 0.025,
+            f"{val:.3f}", ha="center", fontsize=11, fontweight="bold")
+ax.set_ylabel("Average Episode Reward", fontsize=11)
+ax.set_title("Baseline Reward by Curriculum Level", fontsize=12)
+ax.set_ylim(0, 1.15)
+ax.legend(fontsize=9)
+ax.grid(True, alpha=0.3, axis="y")
+ax.set_facecolor("#FAFAFA")
+
+# Right: per-episode rewards (all 4 levels)
+ax = axes[1]
+for lvl in sorted(by_level.keys()):
+    eps = [r["episode"] for r in by_level[lvl]["results"]]
+    rws = [r["reward"] for r in by_level[lvl]["results"]]
+    ax.plot(eps, rws, "o-", color=LEVEL_COLORS[lvl],
+            label=LEVEL_LABELS[lvl], linewidth=1.6, markersize=7)
+ax.axhline(0.70, color="#388E3C", linestyle="--", linewidth=1.8, label="Success threshold")
+ax.set_xlabel("Episode", fontsize=11)
+ax.set_ylabel("Final Episode Reward", fontsize=11)
+ax.set_title("Per-Episode Rewards (all levels)", fontsize=12)
+ax.legend(fontsize=9)
+ax.set_ylim(-0.05, 1.1)
+ax.grid(True, alpha=0.3)
+ax.set_facecolor("#FAFAFA")
+
+gate_color = "#2E7D32" if data["gate"] == "GREEN" else ("#E65100" if data["gate"] == "YELLOW" else "#C62828")
+fig.text(0.5, 0.01,
+         f"Training gate: {data['gate']} — L1 partially solved; L3/L4 unsolved → clear GRPO training target",
+         ha="center", fontsize=10, color=gate_color, fontweight="bold")
+
+plt.tight_layout(rect=[0, 0.05, 1, 1])
+plt.savefig("assets/baseline_reward_curve.png", dpi=150, bbox_inches="tight")
+print("Saved: assets/baseline_reward_curve.png")
+
+# ── Figure 2: learning gap — baseline vs expected post-training ───────────────
+fig2, ax2 = plt.subplots(figsize=(9, 5))
+fig2.suptitle("ComplianceGuard — Learning Gap (Baseline vs Training Target)",
+              fontsize=13, fontweight="bold")
+
+baseline_avgs = [by_level[l]["avg"] for l in [1, 2, 3, 4]]
+# Conservative post-training targets based on GRPO on similar tasks
+target_avgs  = [0.90, 0.75, 0.68, 0.60]
+
+x = np.arange(4)
+w = 0.35
+bars1 = ax2.bar(x - w/2, baseline_avgs, w, label="Baseline (Qwen2.5-7B, no training)",
+                color="#78909C", alpha=0.85, edgecolor="white")
+bars2 = ax2.bar(x + w/2, target_avgs, w, label="Target (post GRPO, Qwen2.5-1.5B)",
+                color="#1565C0", alpha=0.85, edgecolor="white")
+
+for bar, val in zip(bars1, baseline_avgs):
+    ax2.text(bar.get_x() + bar.get_width()/2, val + 0.02,
+             f"{val:.2f}", ha="center", fontsize=10, color="#37474F")
+for bar, val in zip(bars2, target_avgs):
+    ax2.text(bar.get_x() + bar.get_width()/2, val + 0.02,
+             f"{val:.2f}", ha="center", fontsize=10, color="#0D47A1")
+
+ax2.axhline(0.70, color="#388E3C", linestyle="--", linewidth=1.8, label="Success threshold (0.70)")
+ax2.set_xticks(x)
+ax2.set_xticklabels([LEVEL_LABELS[l] for l in [1, 2, 3, 4]], fontsize=10)
+ax2.set_ylabel("Average Reward", fontsize=11)
+ax2.set_title("Baseline vs Training Target (post-GRPO estimates)", fontsize=11)
 ax2.set_ylim(0, 1.15)
 ax2.legend(fontsize=9)
 ax2.grid(True, alpha=0.3, axis="y")
 ax2.set_facecolor("#FAFAFA")
-
-gate_color = "#4CAF50" if data["gate"] == "GREEN" else ("#FF9800" if data["gate"] == "YELLOW" else "#F44336")
-fig.text(0.5, 0.01, f"Training gate: {data['gate']} — Baseline clears the 30% threshold for GRPO training",
-         ha="center", fontsize=10, color=gate_color, fontweight="bold")
+fig2.text(0.5, 0.01, "Targets are projections — actual results will be updated after training run.",
+          ha="center", fontsize=9, color="#757575", style="italic")
 
 plt.tight_layout(rect=[0, 0.04, 1, 1])
-plt.savefig("assets/baseline_reward_curve.png", dpi=150, bbox_inches="tight")
-print("Plot saved: assets/baseline_reward_curve.png")
+plt.savefig("assets/learning_gap.png", dpi=150, bbox_inches="tight")
+print("Saved: assets/learning_gap.png")

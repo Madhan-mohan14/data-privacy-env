@@ -1,23 +1,93 @@
 {
   "model": "Qwen/Qwen2.5-7B-Instruct",
-  "n_episodes": 2,
-  "success_rate": 0.0,
-  "avg_reward": 0.05,
-  "gate": "RED",
+  "n_episodes": 12,
+  "success_rate": 0.1667,
+  "avg_reward": 0.448,
+  "gate": "YELLOW",
   "seeded": false,
   "results": [
     {
       "episode": 0,
-      "level": 4,
-      "steps": 29,
-      "reward": 0.05,
+      "level": 1,
+      "steps": 16,
+      "reward": 0.5245,
       "success": false
     },
     {
       "episode": 1,
-      "level": 4,
+      "level": 1,
+      "steps": 19,
+      "reward": 0.7279,
+      "success": true
+    },
+    {
+      "episode": 2,
+      "level": 1,
+      "steps": 18,
+      "reward": 0.9041,
+      "success": true
+    },
+    {
+      "episode": 3,
+      "level": 2,
+      "steps": 30,
+      "reward": 0.6351,
+      "success": false
+    },
+    {
+      "episode": 4,
+      "level": 2,
+      "steps": 15,
+      "reward": 0.2609,
+      "success": false
+    },
+    {
+      "episode": 5,
+      "level": 2,
       "steps": 30,
       "reward": 0.05,
+      "success": false
+    },
+    {
+      "episode": 6,
+      "level": 3,
+      "steps": 23,
+      "reward": 0.488,
+      "success": false
+    },
+    {
+      "episode": 7,
+      "level": 3,
+      "steps": 19,
+      "reward": 0.4022,
+      "success": false
+    },
+    {
+      "episode": 8,
+      "level": 3,
+      "steps": 18,
+      "reward": 0.3634,
+      "success": false
+    },
+    {
+      "episode": 9,
+      "level": 4,
+      "steps": 29,
+      "reward": 0.3378,
+      "success": false
+    },
+    {
+      "episode": 10,
+      "level": 4,
+      "steps": 26,
+      "reward": 0.3445,
+      "success": false
+    },
+    {
+      "episode": 11,
+      "level": 4,
+      "steps": 29,
+      "reward": 0.3378,
       "success": false
     }
   ]
