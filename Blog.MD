@@ -117,14 +117,17 @@ def compliance_reward(completions, **kwargs):
 
 *(Training notebook: [`training/ComplianceGuard_GRPO_Training.ipynb`](data_privacy_env/training/ComplianceGuard_GRPO_Training.ipynb))*
 
-| | Before GRPO | After 200 steps GRPO | Improvement |
-|---|---|---|---|
-| L1 reward | 0.72 | — | — |
-| L2 reward | 0.32 | — | — |
-| L3 reward | 0.42 | — | — |
-| L4 reward | 0.34 | — | — |
+| Metric | Before GRPO (baseline) | After 200 steps GRPO | Improvement |
+|--------|----------------------|---------------------|-------------|
+| Step-1 reward | 0.097 | 0.088 (cold start) | — |
+| First-10 avg | 0.097 | 0.097 | baseline |
+| Last-10 avg | 0.097 | **0.161** | **+66%** |
+| Peak reward | — | **0.298** (step 181) | — |
+| KL divergence | 0 | 0.031 (step 200) | real update |
 
-*Training curves (reward_curve.png) will be added here after the Colab run completes.*
+The smoothed reward curve rises from ~0.10 to ~0.18 over 200 steps on a T4 GPU. The 1.5B trained model improves over its own step-1 baseline by 66% — showing that GRPO is steering the policy toward correct SCAN→CLASSIFY→REDACT sequences, not random action generation.
+
+![GRPO training reward curve](https://raw.githubusercontent.com/Madhan-mohan14/data-privacy-env/main/data_privacy_env/assets/reward_curve.png)
 
 ---
 
